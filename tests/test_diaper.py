@@ -109,6 +109,36 @@ async def test_get_diaper_history(mock_api):
         assert result[0]["mode"] == "both"
         assert result[0]["color"] == "brown"
         assert result[0]["consistency"] == "solid"
+        assert result[0]["pee_amount"] is None
+        assert result[0]["poo_amount"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "quantity, expected_pee, expected_poo",
+    [
+        ({"pee": 100.0, "poo": 0.0}, "big", "little"),
+        ({"pee": 0.0, "poo": 50.0}, "little", "medium"),
+        ({"pee": 50.0, "poo": 100.0}, "medium", "big"),
+        ({"poo": 0}, None, "little"),
+        ({"pee": 50}, "medium", None),
+        ({}, None, None),
+        (None, None, None),
+        ({"poo": 25}, None, None),
+    ],
+)
+async def test_get_diaper_history_amounts(mock_api, quantity, expected_pee, expected_poo):
+    """Decode stored amounts, including zero, without inventing missing sizes."""
+    mock_api.get_diaper_intervals.return_value = [
+        {"start": 1704103200, "mode": "both", "quantity": quantity}
+    ]
+
+    with patch("huckleberry_mcp.tools.diaper.get_authenticated_api", return_value=mock_api), \
+         patch("huckleberry_mcp.tools.children.get_authenticated_api", return_value=mock_api):
+        result = await diaper.get_diaper_history("child1", "2024-01-01", "2024-01-02")
+
+    assert result[0]["pee_amount"] == expected_pee
+    assert result[0]["poo_amount"] == expected_poo
 
 
 @pytest.mark.asyncio
