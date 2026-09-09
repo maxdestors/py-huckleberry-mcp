@@ -192,7 +192,7 @@ async def log_breastfeeding(
         # Convert start time to timestamp
         start_timestamp = iso_datetime_to_timestamp(start_time, user_timezone)
 
-        # Determine durations
+        # Keep durations in seconds for Firestore; the public API uses minutes.
         if end_time is not None:
             # Calculate total duration from end_time
             if left_duration_minutes is not None or right_duration_minutes is not None:
@@ -207,22 +207,20 @@ async def log_breastfeeding(
             if total_duration_sec <= 0:
                 raise ValueError("end_time must be after start_time")
 
-            total_duration_min = total_duration_sec / 60
-
             # Assign all duration to the specified side
             if last_side == "left":
-                left_duration = total_duration_min
+                left_duration = total_duration_sec
                 right_duration = 0.0
             else:
                 left_duration = 0.0
-                right_duration = total_duration_min
+                right_duration = total_duration_sec
         else:
             # Use provided durations
             if left_duration_minutes is None and right_duration_minutes is None:
                 raise ValueError("Must provide either end_time OR at least one of left_duration_minutes/right_duration_minutes")
 
-            left_duration = float(left_duration_minutes) if left_duration_minutes is not None else 0.0
-            right_duration = float(right_duration_minutes) if right_duration_minutes is not None else 0.0
+            left_duration = float(left_duration_minutes) * 60 if left_duration_minutes is not None else 0.0
+            right_duration = float(right_duration_minutes) * 60 if right_duration_minutes is not None else 0.0
 
             # Determine last_side if not provided
             if last_side is None:
@@ -280,9 +278,9 @@ async def log_breastfeeding(
             "success": True,
             "message": f"Breastfeeding logged for child {child_uid}",
             "start_time": timestamp_to_local_iso(start_timestamp, user_timezone),
-            "left_duration_minutes": int(left_duration),
-            "right_duration_minutes": int(right_duration),
-            "total_duration_minutes": int(total_duration),
+            "left_duration_minutes": int(left_duration / 60),
+            "right_duration_minutes": int(right_duration / 60),
+            "total_duration_minutes": int(total_duration / 60),
             "last_side": last_side,
             "interval_id": interval_id
         }
