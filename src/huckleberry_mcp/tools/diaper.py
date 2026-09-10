@@ -185,6 +185,8 @@ async def get_diaper_history(
         List of dicts, each containing:
         - timestamp (str): Diaper change time in local ISO format
         - mode (str): Diaper mode ("pee", "poo", "both", or "dry")
+        - pee_amount (str | None): Pee amount ("little", "medium", or "big"), None if absent
+        - poo_amount (str | None): Poo amount ("little", "medium", or "big"), None if absent
         - color (str | None): Poo color if recorded, None otherwise
         - consistency (str | None): Poo consistency if recorded, None otherwise
         - notes (str | None): Notes if recorded, None otherwise
@@ -213,14 +215,18 @@ async def get_diaper_history(
         # Use get_diaper_intervals
         intervals = api.get_diaper_intervals(child_uid, start_timestamp, end_timestamp)
 
+        amount_map = {0.0: "little", 50.0: "medium", 100.0: "big"}
         result = []
         for interval in intervals:
             # Convert timestamp to ISO format in user's timezone
             timestamp = timestamp_to_local_iso(interval["start"], user_timezone)
+            quantity = interval.get("quantity") or {}
 
             result.append({
                 "timestamp": timestamp,
                 "mode": interval.get("mode"),
+                "pee_amount": amount_map.get(quantity.get("pee")),
+                "poo_amount": amount_map.get(quantity.get("poo")),
                 "color": interval.get("color"),
                 "consistency": interval.get("consistency"),
                 "notes": interval.get("notes"),
