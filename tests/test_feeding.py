@@ -102,6 +102,42 @@ async def test_get_feeding_history(mock_api):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "duration_args, expected_seconds",
+    [
+        ({"left_duration_minutes": 1}, (60, 0)),
+        ({"right_duration_minutes": 1}, (0, 60)),
+        ({"left_duration_minutes": 10, "right_duration_minutes": 15}, (600, 900)),
+        ({"end_time": "2024-01-01T14:01:00Z", "last_side": "left"}, (60, 0)),
+        ({"end_time": "2024-01-01T14:01:00Z", "last_side": "right"}, (0, 60)),
+        ({"end_time": "2024-01-01T14:01:30Z", "last_side": "right"}, (0, 90)),
+    ],
+)
+async def test_log_breastfeeding_stores_seconds(mock_api, duration_args, expected_seconds):
+    """Persist seconds in both documents while returning whole minutes."""
+    with patch("huckleberry_mcp.tools.feeding.get_authenticated_api", return_value=mock_api), \
+         patch("huckleberry_mcp.tools.children.get_authenticated_api", return_value=mock_api):
+        result = await feeding.log_breastfeeding(
+            "child1", start_time="2024-01-01T14:00:00Z", **duration_args
+        )
+
+    feed_ref = mock_api._get_firestore_client().collection("feed").document("child1")
+    interval_ref = feed_ref.collection("intervals").document(result["interval_id"])
+    interval_ref.set.assert_called_once()
+    feed_ref.update.assert_called_once()
+    interval = interval_ref.set.call_args.args[0]
+    last_nursing = feed_ref.update.call_args.args[0]["prefs.lastNursing"]
+    left_seconds, right_seconds = expected_seconds
+    for data in (interval, last_nursing):
+        assert data["leftDuration"] == left_seconds
+        assert data["rightDuration"] == right_seconds
+    assert last_nursing["duration"] == left_seconds + right_seconds
+    assert result["left_duration_minutes"] == int(left_seconds / 60)
+    assert result["right_duration_minutes"] == int(right_seconds / 60)
+    assert result["total_duration_minutes"] == int((left_seconds + right_seconds) / 60)
+
+
+@pytest.mark.asyncio
 async def test_log_breastfeeding_with_durations(mock_api):
     """Test logging breastfeeding with left and right durations."""
     with patch("huckleberry_mcp.tools.feeding.get_authenticated_api", return_value=mock_api), \
