@@ -38,7 +38,7 @@ class HuckleberryAuth:
             self.load_credentials()
 
         try:
-            self.api = HuckleberryAPI(
+            api = HuckleberryAPI(
                 email=self.email,
                 password=self.password,
                 timezone=self.timezone
@@ -46,7 +46,8 @@ class HuckleberryAuth:
 
             # Test authentication by attempting to get children
             # This will raise an exception if auth fails
-            self.api.get_children()
+            api.get_children()
+            self.api = api
 
             print(f"Successfully authenticated with Huckleberry API", file=sys.stderr)
 

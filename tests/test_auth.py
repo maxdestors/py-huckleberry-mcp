@@ -87,6 +87,34 @@ async def test_authenticate_failure(auth, mock_env):
         with pytest.raises(HuckleberryAuthError, match="Failed to authenticate"):
             await auth.authenticate()
 
+        assert auth.api is None
+        with pytest.raises(HuckleberryAuthError, match="Not authenticated"):
+            auth.get_api()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_stage", ["construction", "validation"])
+async def test_get_authenticated_api_retries_after_failure(auth, mock_env, failure_stage):
+    """Failed clients must not be cached; successful clients should be reused."""
+    failed_api = MagicMock()
+    failed_api.get_children.side_effect = Exception("Auth failed")
+    valid_api = MagicMock()
+    valid_api.get_children.return_value = []
+    first_attempt = Exception("Auth failed") if failure_stage == "construction" else failed_api
+
+    with patch("huckleberry_mcp.auth._auth", auth), patch(
+        "huckleberry_mcp.auth.HuckleberryAPI",
+        side_effect=[first_attempt, valid_api],
+    ) as mock_api_class:
+        with pytest.raises(HuckleberryAuthError, match="Failed to authenticate"):
+            await get_authenticated_api()
+
+        assert auth.api is None
+        assert await get_authenticated_api() is valid_api
+        assert await get_authenticated_api() is valid_api
+        assert mock_api_class.call_count == 2
+        valid_api.get_children.assert_called_once()
+
 
 def test_get_api_not_authenticated(auth):
     """Test getting API when not authenticated."""
